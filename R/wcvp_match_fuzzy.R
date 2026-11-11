@@ -31,7 +31,10 @@
 #'
 #' @family name matching functions
 #'
-wcvp_match_fuzzy <- function(names_df, wcvp_names, name_col, progress_bar = TRUE) {
+wcvp_match_fuzzy <- function(names_df=NULL, wcvp_names, name_col, progress_bar = TRUE) {
+
+  if(is.null(names_df)) cli_abort("Matching a vector of names is currently only supported for `wcvp_match_names`.\n Future implementation for all matching functions can be requested at {.url https://github.com/matildabrown/rWCVP/issues/}")
+
   # check for duplicated names
   if (sum(duplicated(names_df[[name_col]])) > 10) {
     cli::cli_alert_warning("Fuzzy matching is very slow for data with repeated names. \nWe recommend matching a unique set of names to the WCVP, \nthen attaching the resolved matches to the original data using e.g. `*_join` functions.")
@@ -100,16 +103,16 @@ phonetic_match <- function(names_df, wcvp_names, name_col) {
     names_df %>%
     mutate(sanitised_ = sanitise_names_(.data[[name_col]])) %>%
     mutate(mp = metaphone(.data$sanitised_, maxCodeLen = 20, clean = FALSE)) %>%
-    left_join(wcvp_names, by = "mp", suffix = c("", "_wcvp_names"))
+    left_join(wcvp_names, by = "mp", suffix = c("", "_wcvp_names"), relationship = "many-to-many")
 
   matches <-
     matches %>%
     mutate(
-      match_similarity = levenshteinSim(.data$sanitised_, .data$taxon_name),
+      match_similarity = levenshteinSim(.data$sanitised_,  sanitise_names_(.data$taxon_name)),
       match_similarity = round(.data$match_similarity, 3)
     ) %>%
     rowwise() %>%
-    mutate(match_edit_distance = adist(.data$sanitised_, .data$taxon_name)[, 1]) %>%
+    mutate(match_edit_distance = adist(.data$sanitised_, sanitise_names_(.data$taxon_name))[, 1]) %>%
     ungroup()
 
   matches <-
@@ -154,7 +157,6 @@ phonetic_match <- function(names_df, wcvp_names, name_col) {
 #' }
 #'
 edit_match <- function(names_df, wcvp_names, name_col) {
-  withr::local_options(list(cli.progress_show_after = 2, cli.progress_clear = FALSE))
 
   original_names <- colnames(names_df)
   names_df <-
@@ -165,8 +167,11 @@ edit_match <- function(names_df, wcvp_names, name_col) {
   matches <-
     names_df %>%
     mutate(match_info = map(
-      cli_progress_along(.data$sanitised_, "Matching"),
-      ~ edit_match_name_(.data$sanitised_[.x], wcvp_names)
+      .data$sanitised_, ~{edit_match_name_(.x, wcvp_names)},
+      .progress = list(
+        type = "iterator",
+        format = "Matching {cli::pb_bar} {cli::pb_percent} ETA {cli::pb_eta}",
+        clear = TRUE)
     ))
 
   matches <-
@@ -177,7 +182,7 @@ edit_match <- function(names_df, wcvp_names, name_col) {
     left_join(
       wcvp_names,
       by = c("plant_name_id", "taxon_name"),
-      suffix = c("", "_wcvp")
+      suffix = c("", "_wcvp"), multiple="all"
     ) %>%
     format_output_(original_cols = original_names)
 }

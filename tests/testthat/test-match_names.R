@@ -62,3 +62,46 @@ test_that("match names returns original columns", {
 
   expect_true(all(colnames(match_data) %in% colnames(matches)))
 })
+
+test_that("match names works when all names match exactly", {
+  skip_if_not_installed("rWCVPdata")
+  names <- tibble(original_name=c("Fagonia laevis","Dalea seemannii"),
+                  author=c("Standl.","S.Watson ex Orcutt"))
+
+  matches <- wcvp_match_names(
+    names,
+    name_col="original_name",
+    author_col="author",
+    fuzzy=TRUE,
+    progress_bar=FALSE
+  )
+
+  expect_true(all(matches$match_type == "Exact (with author)"))
+})
+
+test_that("matching works with vectors", {
+  skip_if_not_installed("rWCVPdata")
+  name_vec <- c("Fagonia laevis","Dalea seemannii")
+  author_vec <- c("Standl.","S.Watson ex Orcutt")
+
+  match <- wcvp_match_names(name_col=name_vec,
+                            author_col=author_vec,
+                            fuzzy=TRUE,
+                            progress_bar=FALSE)
+
+  expect_equal(colnames(match)[1:2], c("name_vec","author_vec"))
+})
+
+test_that("matching fails with vectors of different lengths", {
+  skip_if_not_installed("rWCVPdata")
+   name_vec <- c("Fagonia laevis","Dalea seemannii")
+   author_vec <-c("Standl.","Standl.","S.Watson ex Orcutt")
+
+   expect_error(wcvp_match_names(name_col=name_vec,
+                                 author_col=author_vec,
+                                 fuzzy=TRUE,
+                                 progress_bar=FALSE))
+
+})
+
+
